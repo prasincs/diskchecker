@@ -24,3 +24,9 @@ With no args, it will return the disk usage
 / All: 7.74 GB Used: 6.51 GB Free: 1.23 GB
 /opt All: 19.99 GB Used: 6.37 GB Free: 13.62 GB
 ```
+
+You can filter further by supplying a regular expression as `-f`, say if you only want to match files ending in `.log`, this is what you would run
+
+```
+./diskchecker -t 10M -f 'jar$' /data
+```

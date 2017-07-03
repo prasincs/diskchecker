@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -56,10 +58,17 @@ func (f *FileDir) PercentUsage() (float64, error) {
 	return float64(f.FileSize) * 100 / float64(f.DirSize), nil
 }
 
-func FindLargeFiles(path string, suffix string, threshold int64) ([]FileDir, error) {
+func FindLargeFiles(dirPath string, filterRegex *regexp.Regexp, threshold int64) ([]FileDir, error) {
 	var files = []FileDir{}
-	err := filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+	err := filepath.Walk(dirPath, func(filePath string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
+			if filterRegex != nil {
+				// match only on filename
+				basePath := path.Base(filePath)
+				if !filterRegex.MatchString(basePath) {
+					return nil
+				}
+			}
 			if info.Size() > threshold {
 				dir := filepath.Dir(filePath)
 				dirSize, _ := DirSize(dir)
@@ -144,12 +153,20 @@ func parseThreshold(s string) (int64, error) {
 
 func main() {
 	thresholdStr := flag.String("t", "100M", "Threshold to look files for")
+	filter := flag.String("f", "", "Filter regex for files")
 	flag.Parse()
+
+	var filterRegex *regexp.Regexp
 
 	threshold, err := parseThreshold(*thresholdStr)
 	if err != nil {
 		log.Fatalf("Unable to parse the string %s, it needs to be <num>(Mm|Kk|Gg)", *thresholdStr)
 	}
+
+	if *filter != "" {
+		filterRegex = regexp.MustCompilePOSIX(*filter)
+	}
+
 	args := flag.Args()
 	if len(args) == 0 {
 		disks, err := GetDisks()
@@ -167,7 +184,7 @@ func main() {
 			}
 			fmt.Printf("path: %s, Size: %.2f MB\n", path, float64(dirSize)/float64(MB))
 
-			largeFiles, err := FindLargeFiles(path, "", threshold)
+			largeFiles, err := FindLargeFiles(path, filterRegex, threshold)
 			if err != nil {
 				log.Fatalf("Failed to search for large files for %s. %s", path, err)
 			}
